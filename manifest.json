@@ -1,0 +1,10 @@
+{
+  "name": "Hitster Chile",
+  "short_name": "Hitster CL",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#14111f",
+  "theme_color": "#14111f",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

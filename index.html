@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hitster Chile</title>
+<meta name="theme-color" content="#14111f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Una pantalla a la vez, pensada para el celular en la mesa: botones grandes, disco al centro */
+:root{
+  --bg:#14111f; --bg2:#1e1a2d; --line:#332d48; --fg:#f1eefa; --muted:#a59fbe;
+  --accent:#ff3d8b; --accent2:#ffb627; --ok:#2fd18d; --err:#ff6b6b;
+  --display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --body:"Figtree","Segoe UI",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:radial-gradient(120% 80% at 50% 0%,#2a2140 0%,var(--bg) 60%);color:var(--fg);font-family:var(--body);font-size:16px;
+  padding:max(14px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+  -webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+.app{max-width:520px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;gap:18px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.01em}
+.brand b{color:var(--accent)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:var(--bg2);border:1px solid var(--line);color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.chip.on .dot{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+section{display:none;flex-direction:column;gap:16px;flex:1}
+section.show{display:flex;animation:fade .35s ease}
+@keyframes fade{from{opacity:.0;transform:translateY(6px)}to{opacity:1;transform:none}}
+h1{font-family:var(--display);font-weight:800;font-size:32px;line-height:1.05;margin:0;text-wrap:balance}
+h2{font-family:var(--display);font-weight:700;font-size:22px;margin:0}
+p{margin:0;color:var(--muted);line-height:1.45}
+.btn{appearance:none;border:0;border-radius:18px;padding:16px 18px;font:700 17px var(--body);cursor:pointer;color:var(--fg);background:var(--bg2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;gap:10px;width:100%;transition:transform .12s}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:linear-gradient(135deg,var(--accent),#ff6a3d);border-color:transparent;color:#fff;box-shadow:0 10px 30px -10px var(--accent)}
+.btn.big{padding:26px 18px;font-size:21px;border-radius:24px}
+.btn.gold{background:var(--accent2);color:#2a1a00;border-color:transparent}
+.btn:disabled{opacity:.5}
+.row{display:flex;gap:10px}
+.row>*{flex:1;min-width:0}
+input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--bg2);color:var(--fg);font:16px var(--body)}
+:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+.card{background:var(--bg2);border:1px solid var(--line);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.code{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:#0e0c16;border-radius:10px;padding:10px;word-break:break-all;color:var(--accent2)}
+.steps{margin:0;padding-left:20px;color:var(--muted);display:flex;flex-direction:column;gap:6px;line-height:1.4}
+.steps b{color:var(--fg)}
+.stat{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--muted)}
+.bar{height:8px;border-radius:9px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .5s}
+.link{background:none;border:0;color:var(--muted);text-decoration:underline;font:500 14px var(--body);cursor:pointer;padding:6px}
+/* escáner */
+.cam{position:relative;border-radius:24px;overflow:hidden;background:#000;aspect-ratio:3/4;max-height:62vh}
+.cam video{width:100%;height:100%;object-fit:cover;display:block}
+.frame{position:absolute;inset:18%;border-radius:20px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45);border:3px solid rgba(255,255,255,.85)}
+.frame::after{content:"";position:absolute;left:6%;right:6%;height:3px;top:10%;background:var(--accent);box-shadow:0 0 12px var(--accent);animation:scan 1.8s ease-in-out infinite alternate}
+@keyframes scan{to{top:88%}}
+/* disco */
+.stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding-block:6px}
+.vinyl{width:min(70vw,300px);aspect-ratio:1;border-radius:50%;position:relative;
+  background:repeating-radial-gradient(circle at 50% 50%,#111 0 2px,#1b1b1b 2px 4px);box-shadow:0 20px 60px -20px #000,inset 0 0 0 6px #0a0a0a;animation:spin 2.2s linear infinite}
+.vinyl::before{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 30deg,transparent 0 40deg,rgba(255,255,255,.08) 60deg,transparent 80deg 220deg,rgba(255,255,255,.06) 240deg,transparent 260deg)}
+.vinyl .lbl{position:absolute;inset:33%;border-radius:50%;background:radial-gradient(circle,#14111f 0 7%,var(--accent) 8% 100%);display:grid;place-items:center}
+.vinyl .lbl span{font-family:var(--display);font-weight:800;color:#fff;font-size:clamp(14px,4vw,20px);transform:translateY(34%)}
+.vinyl.paused{animation-play-state:paused}
+@keyframes spin{to{transform:rotate(360deg)}}
+.status{font-weight:600;color:var(--muted);text-align:center;min-height:1.4em}
+/* revelar */
+.reveal{width:100%;border-radius:24px;padding:22px 18px;text-align:center;color:#fff;display:none;flex-direction:column;gap:6px;background:var(--dec,#444);animation:flip .5s cubic-bezier(.2,.8,.2,1)}
+.reveal.show{display:flex}
+.reveal .y{font-family:var(--display);font-weight:800;font-size:64px;line-height:1}
+.reveal .t{font-weight:700;font-size:20px}
+.reveal .a{opacity:.9}
+.reveal .n{font-size:12px;opacity:.75;margin-top:4px}
+@keyframes flip{from{transform:perspective(600px) rotateX(70deg);opacity:0}to{transform:none;opacity:1}}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,30px);background:#000;color:#fff;padding:12px 16px;border-radius:14px;font-weight:600;font-size:14px;opacity:0;transition:.25s;max-width:90vw;z-index:9;text-align:center}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;justify-content:center;z-index:8}
+.sheet.show{display:flex}
+.sheet .in{background:var(--bg2);width:100%;max-width:520px;border-radius:22px 22px 0 0;padding:18px max(16px,env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:10px;max-height:80vh;overflow:auto}
+.dev{display:flex;justify-content:space-between;align-items:center;padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--bg);cursor:pointer;color:var(--fg);font:600 15px var(--body);text-align:left}
+.dev.sel{border-color:var(--ok)}
+.dev small{color:var(--muted);font-weight:500}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand">Hitster <b>Chile</b></div>
+    <button class="chip" id="devChip" hidden><span class="dot"></span><span id="devName">Sin dispositivo</span></button>
+  </div>
+
+  <!-- 1. Configuración inicial -->
+  <section id="s-setup">
+    <h1>Conecta tu Spotify</h1>
+    <p>Esto se hace una sola vez. Necesitas Spotify Premium y el Client ID de tu app de desarrollador.</p>
+    <div class="card">
+      <b>1 · Redirect URI para pegar en Spotify</b>
+      <div class="code" id="redirectTxt"></div>
+      <button class="btn" id="copyRedirect">Copiar Redirect URI</button>
+    </div>
+    <div class="card">
+      <b>2 · Pega tu Client ID</b>
+      <input id="clientId" placeholder="Ej: 3f9a1b…" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <button class="btn primary" id="connect">Conectar con Spotify</button>
+    <p id="setupErr" style="color:var(--err)"></p>
+  </section>
+
+  <!-- 2. Inicio -->
+  <section id="s-home">
+    <h1>¿Listos para jugar?</h1>
+    <button class="btn primary big" id="goScan">📷 Escanear carta</button>
+    <div class="row">
+      <button class="btn" id="randomCard">🎲 Carta al azar</button>
+      <button class="btn" id="byNumber">#️⃣ Por número</button>
+    </div>
+    <div class="card">
+      <div class="stat"><span>Cartas jugadas</span><b id="playedTxt">0 / 308</b></div>
+      <div class="bar"><i id="playedBar"></i></div>
+      <button class="link" id="resetPlayed">Empezar partida nueva</button>
+    </div>
+    <div class="card">
+      <b>Antes de escanear</b>
+      <ol class="steps">
+        <li>Abre la app de <b>Spotify</b> en este celular (o tu parlante) y dale play a cualquier cosa un segundo.</li>
+        <li>Vuelve aquí y toca el punto de arriba a la derecha para elegir dónde suena.</li>
+        <li>No bajes la cortina de notificaciones: ahí Spotify muestra la canción.</li>
+      </ol>
+    </div>
+    <button class="link" id="logout">Desconectar Spotify</button>
+  </section>
+
+  <!-- 3. Escáner -->
+  <section id="s-scan">
+    <h2>Apunta al QR de la carta</h2>
+    <div class="cam"><video id="video" playsinline muted></video><div class="frame"></div></div>
+    <p class="status" id="scanStatus">Buscando código…</p>
+    <button class="btn" id="cancelScan">Cancelar</button>
+  </section>
+
+  <!-- 4. Sonando -->
+  <section id="s-play">
+    <div class="stage">
+      <div class="vinyl" id="vinyl"><div class="lbl"><span id="cardNo">#?</span></div></div>
+      <p class="status" id="playStatus">Sonando…</p>
+      <div class="reveal" id="reveal">
+        <div class="a" id="rArtist"></div>
+        <div class="y" id="rYear"></div>
+        <div class="t" id="rTitle"></div>
+        <div class="n" id="rNo"></div>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn" id="pauseBtn">⏸ Pausa</button>
+      <button class="btn" id="replayBtn">↺ Desde el inicio</button>
+    </div>
+    <button class="btn gold" id="revealBtn">👀 Revelar respuesta</button>
+    <button class="btn primary big" id="nextBtn">📷 Siguiente carta</button>
+    <button class="link" id="homeBtn">Volver al inicio</button>
+  </section>
+</div>
+
+<div class="sheet" id="devSheet"><div class="in">
+  <h2>¿Dónde suena la música?</h2>
+  <p>Si tu celular no aparece, abre Spotify en él, reproduce algo y toca «Buscar de nuevo».</p>
+  <div id="devList" style="display:flex;flex-direction:column;gap:8px"></div>
+  <div class="row"><button class="btn" id="devRefresh">Buscar de nuevo</button><button class="btn" id="devClose">Listo</button></div>
+</div></div>
+
+<div class="sheet" id="numSheet"><div class="in">
+  <h2>Número de carta</h2>
+  <input id="numInput" type="number" inputmode="numeric" min="1" max="308" placeholder="1 a 308">
+  <div class="row"><button class="btn" id="numCancel">Cancelar</button><button class="btn primary" id="numGo">Reproducir</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script src="cards.js"></script>
+<script>
+(() => {
+'use strict';
+const CARDS = window.CARDS || [];
+const byId = new Map(CARDS.map(c => [c[1], c]));
+const byNo = new Map(CARDS.map(c => [c[0], c]));
+const SCOPES = 'user-modify-playback-state user-read-playback-state';
+const REDIRECT = location.origin + location.pathname.replace(/index\.html$/, '');
+const DEC = {1950:'#6b4fd8',1960:'#4e5fd6',1970:'#1f7fbf',1980:'#0f8f8b',1990:'#3a9a43',2000:'#c98a00',2010:'#e0581c',2020:'#c81e63'};
+const $ = id => document.getElementById(id);
+
+// ---------- almacenamiento seguro ----------
+const ls = {
+  get(k, d=null){ try{ const v = localStorage.getItem(k); return v===null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+let played = new Set(ls.get('played', []));
+let current = null;      // carta sonando
+let paused = false;
+
+// ---------- UI helpers ----------
+function show(id){ document.querySelectorAll('section').forEach(s => s.classList.toggle('show', s.id === 's-' + id)); window.scrollTo(0,0); }
+let toastT;
+function toast(msg, ms=3200){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'), ms); }
+function updatePlayed(){ $('playedTxt').textContent = played.size + ' / ' + CARDS.length; $('playedBar').style.width = (played.size/CARDS.length*100) + '%'; }
+
+// ---------- Spotify: login con PKCE ----------
+function b64url(bytes){ return btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+function randomStr(n){ const a = new Uint8Array(n); crypto.getRandomValues(a); return b64url(a).slice(0, n); }
+async function login(){
+  const cid = $('clientId').value.trim();
+  if(!/^[0-9a-f]{32}$/i.test(cid)){ $('setupErr').textContent = 'El Client ID son 32 letras y números. Cópialo desde Settings en tu app de Spotify.'; return; }
+  ls.set('clientId', cid);
+  const verifier = randomStr(64);
+  ls.set('verifier', verifier);
+  const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  const p = new URLSearchParams({ response_type:'code', client_id:cid, scope:SCOPES, redirect_uri:REDIRECT, code_challenge_method:'S256', code_challenge:challenge });
+  location.href = 'https://accounts.spotify.com/authorize?' + p;
+}
+async function tokenRequest(params){
+  const r = await fetch('https://accounts.spotify.com/api/token', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:new URLSearchParams(params) });
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error_description || j.error || ('Error ' + r.status));
+  const old = ls.get('tok', {});
+  ls.set('tok', { access:j.access_token, refresh:j.refresh_token || old.refresh, exp:Date.now() + (j.expires_in-60)*1000 });
+}
+async function handleCallback(){
+  const q = new URLSearchParams(location.search);
+  if(!q.has('code') && !q.has('error')) return;
+  history.replaceState(null, '', REDIRECT);
+  if(q.get('error')){ $('setupErr').textContent = q.get('error') === 'access_denied' ? 'Cancelaste el permiso en Spotify. Vuelve a tocar Conectar.' : 'Spotify respondió: ' + q.get('error'); return; }
+  try{
+    await tokenRequest({ grant_type:'authorization_code', code:q.get('code'), redirect_uri:REDIRECT, client_id:ls.get('clientId'), code_verifier:ls.get('verifier') });
+    ls.del('verifier');
+    toast('Spotify conectado ✅');
+  }catch(e){ $('setupErr').textContent = 'No se pudo conectar: ' + e.message + '. Revisa que el Redirect URI en Spotify sea exactamente el de arriba.'; }
+}
+async function accessToken(){
+  const t = ls.get('tok');
+  if(!t) return null;
+  if(Date.now() < t.exp) return t.access;
+  try{ await tokenRequest({ grant_type:'refresh_token', refresh_token:t.refresh, client_id:ls.get('clientId') }); return ls.get('tok').access; }
+  catch(e){ ls.del('tok'); return null; }
+}
+async function api(method, path, body){
+  let t = await accessToken();
+  if(!t){ show('setup'); throw new Error('auth'); }
+  const go = tk => fetch('https://api.spotify.com/v1' + path, { method, headers:{ Authorization:'Bearer ' + tk, 'Content-Type':'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  let r = await go(t);
+  if(r.status === 401){ const tk = ls.get('tok'); if(tk){ tk.exp = 0; ls.set('tok', tk); } t = await accessToken(); if(!t){ show('setup'); throw new Error('auth'); } r = await go(t); }
+  return r;
+}
+
+// ---------- dispositivos ----------
+let devices = [];
+async function loadDevices(){
+  try{
+    const r = await api('GET', '/me/player/devices');
+    devices = r.ok ? (await r.json()).devices || [] : [];
+  }catch(e){ devices = []; }
+  renderDevChip();
+  return devices;
+}
+function chosenDevice(){
+  const saved = ls.get('deviceId');
+  return devices.find(d => d.id === saved) || devices.find(d => d.is_active) || devices.find(d => d.type === 'Smartphone') || devices[0] || null;
+}
+function renderDevChip(){
+  const d = chosenDevice();
+  $('devChip').hidden = false;
+  $('devChip').classList.toggle('on', !!d);
+  $('devName').textContent = d ? d.name : 'Elegir dónde suena';
+}
+function renderDevList(){
+  const cur = chosenDevice();
+  $('devList').innerHTML = devices.length ? '' : '<p>No encontré dispositivos. Abre Spotify y reproduce algo.</p>';
+  devices.forEach(d => {
+    const b = document.createElement('button');
+    b.className = 'dev' + (cur && cur.id === d.id ? ' sel' : '');
+    b.innerHTML = '<span></span><small></small>';
+    b.firstChild.textContent = d.name;
+    b.lastChild.textContent = (d.type === 'Smartphone' ? 'Celular' : d.type === 'Computer' ? 'Computador' : d.type === 'Speaker' ? 'Parlante' : d.type) + (d.is_active ? ' · activo' : '');
+    b.onclick = () => { ls.set('deviceId', d.id); renderDevList(); renderDevChip(); };
+    $('devList').appendChild(b);
+  });
+}
+async function openDevices(){ $('devSheet').classList.add('show'); $('devList').innerHTML = '<p>Buscando…</p>'; await loadDevices(); renderDevList(); }
+
+// ---------- reproducir ----------
+async function playCard(card, trackId){
+  current = { card, trackId };
+  paused = false;
+  show('play');
+  $('reveal').classList.remove('show');
+  $('revealBtn').disabled = false;
+  $('cardNo').textContent = card ? '#' + card[0] : '?';
+  $('vinyl').classList.add('paused');
+  $('playStatus').textContent = 'Conectando con Spotify…';
+  $('pauseBtn').textContent = '⏸ Pausa';
+  await loadDevices();
+  let dev = chosenDevice();
+  if(!dev){ $('playStatus').textContent = 'No hay dónde reproducir. Abre Spotify en tu celular y toca «Desde el inicio».'; openDevices(); return; }
+  let r;
+  try{ r = await api('PUT', '/me/player/play?device_id=' + encodeURIComponent(dev.id), { uris:['spotify:track:' + trackId], position_ms:0 }); }
+  catch(e){ return; }
+  if(r.ok || r.status === 202 || r.status === 204){
+    $('vinyl').classList.remove('paused');
+    $('playStatus').textContent = 'Sonando en ' + dev.name;
+    if(card){ played.add(card[0]); ls.set('played', [...played]); updatePlayed(); }
+    return;
+  }
+  const j = await r.json().catch(()=>({}));
+  const reason = (j.error && (j.error.reason || j.error.message)) || '';
+  if(r.status === 403) $('playStatus').textContent = 'Spotify no deja reproducir: se necesita Premium (' + reason + ').';
+  else if(r.status === 404){ $('playStatus').textContent = 'El dispositivo se durmió. Abre Spotify, dale play a algo y toca «Desde el inicio».'; openDevices(); }
+  else $('playStatus').textContent = 'Error ' + r.status + ' ' + reason;
+}
+async function togglePause(){
+  if(!current) return;
+  const dev = chosenDevice();
+  const q = dev ? '?device_id=' + encodeURIComponent(dev.id) : '';
+  const r = await api('PUT', '/me/player/' + (paused ? 'play' : 'pause') + q).catch(()=>null);
+  if(r && (r.ok || r.status === 204 || r.status === 202)){
+    paused = !paused;
+    $('vinyl').classList.toggle('paused', paused);
+    $('pauseBtn').textContent = paused ? '▶ Seguir' : '⏸ Pausa';
+    $('playStatus').textContent = paused ? 'En pausa' : 'Sonando';
+  } else toast('No pude cambiar la reproducción');
+}
+function reveal(){
+  if(!current) return;
+  const c = current.card;
+  const el = $('reveal');
+  if(c){
+    el.style.setProperty('--dec', DEC[Math.floor(c[4]/10)*10] || '#444');
+    $('rYear').textContent = c[4]; $('rTitle').textContent = c[2]; $('rArtist').textContent = c[3]; $('rNo').textContent = 'Carta #' + c[0];
+  } else {
+    el.style.setProperty('--dec', '#444');
+    $('rYear').textContent = '¿?'; $('rTitle').textContent = 'Esta canción no está en el mazo'; $('rArtist').textContent = ''; $('rNo').textContent = 'Mírala en Spotify';
+  }
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  $('revealBtn').disabled = true;
+}
+
+// ---------- escáner QR ----------
+let stream = null, rafId = 0, lastScan = 0;
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d', { willReadFrequently:true });
+function parseTrack(text){
+  const m = String(text).match(/track[\/:]([A-Za-z0-9]{22})/);
+  return m ? m[1] : null;
+}
+async function startScan(){
+  show('scan');
+  $('scanStatus').textContent = 'Abriendo cámara…';
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ $('scanStatus').textContent = 'Este navegador no deja usar la cámara. Usa Chrome o Safari.'; return; }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:720 } }, audio:false });
+  }catch(e){ $('scanStatus').textContent = 'Sin permiso de cámara. Actívalo en los ajustes del navegador para este sitio.'; return; }
+  const v = $('video'); v.srcObject = stream; await v.play().catch(()=>{});
+  $('scanStatus').textContent = 'Buscando código…';
+  tick();
+}
+function stopScan(){ cancelAnimationFrame(rafId); if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; } }
+function tick(){
+  rafId = requestAnimationFrame(tick);
+  const v = $('video');
+  const now = performance.now();
+  if(v.readyState < 2 || now - lastScan < 120) return;
+  lastScan = now;
+  const w = v.videoWidth, h = v.videoHeight, s = Math.min(w, h);
+  const size = Math.min(640, s);
+  canvas.width = size; canvas.height = size;
+  ctx.drawImage(v, (w - s)/2, (h - s)/2, s, s, 0, 0, size, size);
+  const img = ctx.getImageData(0, 0, size, size);
+  const code = window.jsQR ? jsQR(img.data, size, size, { inversionAttempts:'dontInvert' }) : null;
+  if(!code) return;
+  const id = parseTrack(code.data);
+  if(!id){ $('scanStatus').textContent = 'Ese QR no es una canción de Spotify.'; return; }
+  stopScan();
+  if(navigator.vibrate) navigator.vibrate(60);
+  playCard(byId.get(id) || null, id);
+}
+
+// ---------- carta al azar / por número ----------
+function randomCard(){
+  const left = CARDS.filter(c => !played.has(c[0]));
+  if(!left.length){ toast('Ya salieron las 308 cartas. Toca «Empezar partida nueva».'); return; }
+  const c = left[Math.floor(Math.random() * left.length)];
+  playCard(c, c[1]);
+}
+
+// ---------- eventos ----------
+$('redirectTxt').textContent = REDIRECT;
+$('copyRedirect').onclick = () => {
+  const done = () => toast('Redirect URI copiado');
+  if(navigator.clipboard) navigator.clipboard.writeText(REDIRECT).then(done, () => toast('Mantén presionado el texto para copiarlo'));
+  else toast('Mantén presionado el texto para copiarlo');
+};
+$('clientId').value = ls.get('clientId', '') || '';
+$('connect').onclick = login;
+$('goScan').onclick = startScan;
+$('nextBtn').onclick = startScan;
+$('cancelScan').onclick = () => { stopScan(); show('home'); };
+$('randomCard').onclick = randomCard;
+$('byNumber').onclick = () => { $('numSheet').classList.add('show'); $('numInput').value=''; setTimeout(()=>$('numInput').focus(), 50); };
+$('numCancel').onclick = () => $('numSheet').classList.remove('show');
+$('numGo').onclick = () => { const c = byNo.get(parseInt($('numInput').value, 10)); if(!c){ toast('Escribe un número entre 1 y 308'); return; } $('numSheet').classList.remove('show'); playCard(c, c[1]); };
+$('numInput').addEventListener('keydown', e => { if(e.key === 'Enter') $('numGo').click(); });
+$('pauseBtn').onclick = togglePause;
+$('replayBtn').onclick = () => { if(current) playCard(current.card, current.trackId); };
+$('revealBtn').onclick = reveal;
+$('homeBtn').onclick = () => show('home');
+$('resetPlayed').onclick = () => { played = new Set(); ls.set('played', []); updatePlayed(); toast('Partida nueva: todas las cartas disponibles'); };
+$('logout').onclick = () => { ls.del('tok'); show('setup'); };
+$('devChip').onclick = openDevices;
+$('devRefresh').onclick = openDevices;
+$('devClose').onclick = () => $('devSheet').classList.remove('show');
+document.querySelectorAll('.sheet').forEach(s => s.addEventListener('click', e => { if(e.target === s) s.classList.remove('show'); }));
+document.addEventListener('visibilitychange', () => { if(document.hidden && stream) { stopScan(); show('home'); } });
+
+// ---------- inicio ----------
+(async () => {
+  updatePlayed();
+  await handleCallback();
+  if(await accessToken()){ show('home'); loadDevices(); }
+  else show('setup');
+})();
+})();
+</script>
+</body>
+</html>
