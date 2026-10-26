@@ -74,6 +74,22 @@ input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);ba
 .vinyl .lbl{position:absolute;inset:33%;border-radius:50%;background:radial-gradient(circle,#14111f 0 7%,var(--accent) 8% 100%);display:grid;place-items:center}
 .vinyl .lbl span{font-family:var(--display);font-weight:800;color:#fff;font-size:clamp(14px,4vw,20px);transform:translateY(34%)}
 .vinyl.paused{animation-play-state:paused}
+.vwrap{position:relative;display:grid;place-items:center}
+.tapper{position:absolute;left:50%;top:50%;width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;z-index:2}
+.tapper svg{position:absolute;inset:-12px;width:108px;height:108px;transform:rotate(-90deg);pointer-events:none}
+.tapper svg circle{fill:none;stroke-width:5}
+.tapper .trk{stroke:rgba(255,255,255,.18)}
+.tapper .prg{stroke:var(--accent2);stroke-linecap:round;transition:stroke-dashoffset .4s linear}
+.tapclip{position:absolute;inset:0;border-radius:50%;overflow:hidden;background:#fff;box-shadow:0 8px 24px -6px #000}
+#embedWrap{position:absolute;left:-670.4px;top:-103.6px;width:300px;height:80px;transform:scale(2.6);transform-origin:0 0}
+#embedWrap iframe{width:300px;height:80px;border:0;display:block}
+.tapper.unmask{width:300px;height:80px;margin:-40px 0 0 -150px;border-radius:12px}
+.tapper.unmask .tapclip{border-radius:12px}
+.tapper.unmask svg{display:none}
+.tapper.unmask #embedWrap{left:0;top:0;transform:none}
+.seg{display:flex;gap:6px;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:4px}
+.seg button{flex:1;border:0;background:none;color:var(--muted);font:700 14px var(--body);padding:10px 8px;border-radius:10px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .status{font-weight:600;color:var(--muted);text-align:center;min-height:1.4em}
 /* revelar */
@@ -117,6 +133,7 @@ input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);ba
     </div>
     <button class="btn primary" id="connect">Conectar con Spotify</button>
     <p id="setupErr" style="color:var(--err)"></p>
+    <button class="link" id="skipSetup">Jugar en este celular sin conectar (fragmentos de 30 s)</button>
   </section>
 
   <!-- 2. Inicio -->
@@ -128,11 +145,19 @@ input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);ba
       <button class="btn" id="byNumber">#️⃣ Por número</button>
     </div>
     <div class="card">
+      <b>¿Dónde suena la música?</b>
+      <div class="seg" role="group" aria-label="Modo de reproducción">
+        <button id="modeEmbed" aria-pressed="false">Este celular · 30 s</button>
+        <button id="modeConnect" aria-pressed="false">App Spotify / parlante</button>
+      </div>
+      <p id="modeHint" style="font-size:13px"></p>
+    </div>
+    <div class="card">
       <div class="stat"><span>Cartas jugadas</span><b id="playedTxt">0 / 308</b></div>
       <div class="bar"><i id="playedBar"></i></div>
       <button class="link" id="resetPlayed">Empezar partida nueva</button>
     </div>
-    <div class="card">
+    <div class="card" id="tipsConnect">
       <b>Antes de escanear</b>
       <ol class="steps">
         <li>Abre la app de <b>Spotify</b> en este celular (o tu parlante) y dale play a cualquier cosa un segundo.</li>
@@ -155,7 +180,13 @@ input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);ba
   <!-- 4. Sonando -->
   <section id="s-play">
     <div class="stage">
-      <div class="vinyl" id="vinyl"><div class="lbl"><span id="cardNo">#?</span></div></div>
+      <div class="vwrap">
+        <div class="vinyl" id="vinyl"><div class="lbl"><span id="cardNo">#?</span></div></div>
+        <div class="tapper" id="tapper" hidden>
+          <svg viewBox="0 0 108 108" aria-hidden="true"><circle class="trk" cx="54" cy="54" r="50"/><circle class="prg" id="prg" cx="54" cy="54" r="50" stroke-dasharray="314.16" stroke-dashoffset="314.16"/></svg>
+          <div class="tapclip"><div id="embedWrap"><div id="embedHost"></div></div></div>
+        </div>
+      </div>
       <p class="status" id="playStatus">Sonando…</p>
       <div class="card" id="wakeBox" hidden style="width:100%">
         <b>No encuentro tu celular en Spotify</b>
@@ -180,6 +211,7 @@ input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);ba
     <button class="btn gold" id="revealBtn">👀 Revelar respuesta</button>
     <button class="btn primary big" id="nextBtn">📷 Siguiente carta</button>
     <button class="link" id="homeBtn">Volver al inicio</button>
+    <button class="link" id="unmaskBtn" hidden>¿No ves el botón ▶? Mostrar reproductor completo (se ve el título)</button>
     <button class="link" id="diagPlay">🔧 Diagnóstico</button>
   </section>
 </div>
@@ -208,10 +240,12 @@ input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);ba
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <script src="cards.js"></script>
+<script>window.onSpotifyIframeApiReady = api => { window.__SPAPI = api; };</script>
+<script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
 <script>
 (() => {
 'use strict';
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CARDS = window.CARDS || [];
 const byId = new Map(CARDS.map(c => [c[1], c]));
 const byNo = new Map(CARDS.map(c => [c[0], c]));
@@ -227,6 +261,8 @@ const ls = {
   del(k){ try{ localStorage.removeItem(k); }catch(e){} }
 };
 let played = new Set(ls.get('played', []));
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+let mode = ls.get('mode', IS_IOS ? 'embed' : 'connect');
 let current = null;      // carta sonando
 let paused = false;
 
@@ -299,7 +335,7 @@ function chosenDevice(){
 }
 function renderDevChip(){
   const d = chosenDevice();
-  $('devChip').hidden = false;
+  $('devChip').hidden = mode === 'embed';
   $('devChip').classList.toggle('on', !!d);
   $('devName').textContent = d ? d.name : 'Elegir dónde suena';
 }
@@ -355,6 +391,8 @@ async function diagnose(){
   $('diagSheet').classList.add('show');
   $('diagOut').textContent = 'Consultando Spotify…';
   const L = ['Versión: ' + VERSION, 'Navegador: ' + navigator.userAgent.replace(/^Mozilla\/5.0 /,'').slice(0,90), ''];
+  L.push('Modo: ' + (mode === 'embed' ? 'este celular (30 s)' : 'Spotify Connect') + ' · reproductor: ' + (ctrl ? 'cargado' : (window.__SPAPI ? 'API lista' : 'API sin cargar')));
+  if(!(await accessToken())){ L.push('Spotify: sin conectar'); $('diagOut').textContent = L.join('\n'); return; }
   await loadDevices();
   L.push('Dispositivos (' + devices.length + '):');
   devices.forEach(d => L.push(' • ' + d.name + ' [' + d.type + ']' + (d.is_active ? ' ACTIVO' : '') + (d.is_restricted ? ' RESTRINGIDO' : '') + (d.volume_percent != null ? ' vol ' + d.volume_percent + '%' : '')));
@@ -428,7 +466,69 @@ function verifyPlaying(trackId, deviceId){
     }, 2500);
   }, 2500);
 }
+// ---------- modo «este celular»: reproductor oficial de Spotify incrustado ----------
+let ctrl = null;
+const fmt = ms => { const t = Math.max(0, Math.round((ms||0)/1000)); return Math.floor(t/60) + ':' + String(t%60).padStart(2,'0'); };
+function waitApi(){
+  return new Promise((res, rej) => {
+    const t0 = Date.now();
+    (function chk(){ if(window.__SPAPI) return res(window.__SPAPI); if(Date.now() - t0 > 12000) return rej(new Error('api')); setTimeout(chk, 150); })();
+  });
+}
+async function embedLoad(uri){
+  if(ctrl){ ctrl.loadUri(uri); return; }
+  const api = await waitApi();
+  await new Promise(res => api.createController($('embedHost'), { uri, width:300, height:80 }, c => {
+    ctrl = c; c.addListener('playback_update', onEmbedUpdate); res();
+  }));
+}
+function onEmbedUpdate(e){
+  if(!current || mode !== 'embed') return;
+  const d = (e && e.data) || {};
+  const playing = !d.isPaused;
+  const pos = d.position || 0, dur = d.duration || 0;
+  $('vinyl').classList.toggle('paused', !playing);
+  $('prg').style.strokeDashoffset = dur ? 314.16 * (1 - Math.min(1, pos/dur)) : 314.16;
+  if(playing) $('playStatus').textContent = 'Sonando · ' + fmt(pos) + ' / ' + fmt(dur);
+  else if(dur && pos >= dur - 600) $('playStatus').textContent = 'Terminó el fragmento. Toca ▶ para escucharlo otra vez';
+  else if(pos > 0) $('playStatus').textContent = 'En pausa · toca ▶ para seguir';
+  else $('playStatus').textContent = 'Toca ▶ en el centro del disco';
+}
+function embedStop(){ if(ctrl){ try{ ctrl.pause(); }catch(e){} } }
+async function embedPlayCard(card, trackId){
+  current = { card, trackId };
+  paused = false;
+  show('play');
+  showWake(false);
+  $('reveal').classList.remove('show');
+  $('revealBtn').disabled = false;
+  $('cardNo').textContent = card ? '#' + card[0] : '?';
+  $('vinyl').classList.add('paused');
+  $('tapper').hidden = false; $('tapper').classList.remove('unmask');
+  $('pauseBtn').hidden = true; $('unmaskBtn').hidden = false;
+  $('prg').style.strokeDashoffset = 314.16;
+  $('playStatus').textContent = 'Preparando la canción…';
+  try{
+    await embedLoad('spotify:track:' + trackId);
+    $('playStatus').textContent = 'Toca ▶ en el centro del disco';
+    if(card){ played.add(card[0]); ls.set('played', [...played]); updatePlayed(); }
+  }catch(e){
+    $('playStatus').textContent = 'No pude cargar el reproductor de Spotify. Revisa tu internet y toca «Desde el inicio».';
+  }
+}
+function setMode(m){
+  mode = m; ls.set('mode', m);
+  $('modeEmbed').setAttribute('aria-pressed', m === 'embed');
+  $('modeConnect').setAttribute('aria-pressed', m === 'connect');
+  $('modeHint').textContent = m === 'embed'
+    ? 'Suena aquí mismo, 30 segundos por carta. Después de escanear, toca ▶ en el centro del disco.'
+    : 'Controla la app de Spotify o un parlante (canción completa, requiere Premium). En iPhone, Spotify suele dormirse: mejor usa un PC, TV o parlante.';
+  $('tipsConnect').hidden = m === 'embed';
+  renderDevChip();
+}
 async function playCard(card, trackId){
+  if(mode === 'embed') return embedPlayCard(card, trackId);
+  $('tapper').hidden = true; $('pauseBtn').hidden = false; $('unmaskBtn').hidden = true;
   current = { card, trackId };
   paused = false;
   show('play');
@@ -476,6 +576,7 @@ function parseTrack(text){
 }
 async function startScan(){
   showWake(false);
+  embedStop();
   show('scan');
   $('scanStatus').textContent = 'Abriendo cámara…';
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ $('scanStatus').textContent = 'Este navegador no deja usar la cámara. Usa Chrome o Safari.'; return; }
@@ -535,9 +636,13 @@ $('numCancel').onclick = () => $('numSheet').classList.remove('show');
 $('numGo').onclick = () => { const c = byNo.get(parseInt($('numInput').value, 10)); if(!c){ toast('Escribe un número entre 1 y 308'); return; } $('numSheet').classList.remove('show'); playCard(c, c[1]); };
 $('numInput').addEventListener('keydown', e => { if(e.key === 'Enter') $('numGo').click(); });
 $('pauseBtn').onclick = togglePause;
-$('replayBtn').onclick = () => { if(current) playCard(current.card, current.trackId); };
+$('replayBtn').onclick = () => {
+  if(!current) return;
+  if(mode === 'embed'){ if(ctrl){ try{ ctrl.seek(0); }catch(e){} $('playStatus').textContent = 'Vuelve al inicio · toca ▶ si está en pausa'; } else playCard(current.card, current.trackId); return; }
+  playCard(current.card, current.trackId);
+};
 $('revealBtn').onclick = reveal;
-$('homeBtn').onclick = () => { showWake(false); show('home'); };
+$('homeBtn').onclick = () => { showWake(false); embedStop(); show('home'); };
 $('resetPlayed').onclick = () => { played = new Set(); ls.set('played', []); updatePlayed(); toast('Partida nueva: todas las cartas disponibles'); };
 $('logout').onclick = () => { ls.del('tok'); show('setup'); };
 $('devChip').onclick = openDevices;
@@ -549,6 +654,10 @@ document.addEventListener('visibilitychange', () => {
   if(!document.hidden && pending) setTimeout(() => attemptPlay(true), 800);
 });
 $('wakeRetry').onclick = () => attemptPlay(false);
+$('modeEmbed').onclick = () => setMode('embed');
+$('modeConnect').onclick = async () => { setMode('connect'); if(!(await accessToken())) show('setup'); else loadDevices(); };
+$('skipSetup').onclick = () => { setMode('embed'); show('home'); };
+$('unmaskBtn').onclick = () => { $('tapper').classList.toggle('unmask'); };
 $('diagHome').onclick = diagnose;
 $('diagPlay').onclick = diagnose;
 $('diagRefresh').onclick = diagnose;
@@ -558,7 +667,9 @@ $('diagClose').onclick = () => $('diagSheet').classList.remove('show');
 (async () => {
   updatePlayed();
   await handleCallback();
-  if(await accessToken()){ show('home'); loadDevices(); }
+  setMode(mode);
+  if(mode === 'embed'){ show('home'); if(await accessToken()) loadDevices(); }
+  else if(await accessToken()){ show('home'); loadDevices(); }
   else show('setup');
 })();
 })();
