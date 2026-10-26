@@ -140,6 +140,7 @@ input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);ba
         <li>No bajes la cortina de notificaciones: ahí Spotify muestra la canción.</li>
       </ol>
     </div>
+    <button class="link" id="diagHome">🔧 Diagnóstico</button>
     <button class="link" id="logout">Desconectar Spotify</button>
   </section>
 
@@ -179,6 +180,7 @@ input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);ba
     <button class="btn gold" id="revealBtn">👀 Revelar respuesta</button>
     <button class="btn primary big" id="nextBtn">📷 Siguiente carta</button>
     <button class="link" id="homeBtn">Volver al inicio</button>
+    <button class="link" id="diagPlay">🔧 Diagnóstico</button>
   </section>
 </div>
 
@@ -195,6 +197,13 @@ input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);ba
   <div class="row"><button class="btn" id="numCancel">Cancelar</button><button class="btn primary" id="numGo">Reproducir</button></div>
 </div></div>
 
+<div class="sheet" id="diagSheet"><div class="in">
+  <h2>Diagnóstico</h2>
+  <p>Saca una captura de esta pantalla y mándasela a Claude. No muestra el nombre de la canción.</p>
+  <div class="code" id="diagOut" style="white-space:pre-wrap;color:var(--fg)">Cargando…</div>
+  <div class="row"><button class="btn" id="diagRefresh">Actualizar</button><button class="btn" id="diagClose">Cerrar</button></div>
+</div></div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
@@ -202,7 +211,7 @@ input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);ba
 <script>
 (() => {
 'use strict';
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CARDS = window.CARDS || [];
 const byId = new Map(CARDS.map(c => [c[1], c]));
 const byNo = new Map(CARDS.map(c => [c[0], c]));
@@ -329,10 +338,41 @@ function showWake(on){
     }, 2500);
   } else stopPoll();
 }
+const log = [];
+function addLog(t){ log.push(new Date().toTimeString().slice(0,8) + ' ' + t); if(log.length > 12) log.shift(); }
 async function tryPlayOn(deviceId, trackId){
   const q = deviceId ? '?device_id=' + encodeURIComponent(deviceId) : '';
-  try{ return await api('PUT', '/me/player/play' + q, { uris:['spotify:track:' + trackId], position_ms:0 }); }
-  catch(e){ return null; }
+  const dn = deviceId ? ((devices.find(d => d.id === deviceId) || {}).name || 'id guardado ' + deviceId.slice(0,6)) : 'último activo';
+  try{
+    const r = await api('PUT', '/me/player/play' + q, { uris:['spotify:track:' + trackId], position_ms:0 });
+    let why = '';
+    if(!okStatus(r)){ const j = await r.clone().json().catch(()=>({})); why = ' ' + ((j.error && (j.error.reason || j.error.message)) || ''); }
+    addLog('PLAY → ' + dn + ' = ' + r.status + why);
+    return r;
+  }catch(e){ addLog('PLAY → ' + dn + ' = error ' + e.message); return null; }
+}
+async function diagnose(){
+  $('diagSheet').classList.add('show');
+  $('diagOut').textContent = 'Consultando Spotify…';
+  const L = ['Versión: ' + VERSION, 'Navegador: ' + navigator.userAgent.replace(/^Mozilla\/5.0 /,'').slice(0,90), ''];
+  await loadDevices();
+  L.push('Dispositivos (' + devices.length + '):');
+  devices.forEach(d => L.push(' • ' + d.name + ' [' + d.type + ']' + (d.is_active ? ' ACTIVO' : '') + (d.is_restricted ? ' RESTRINGIDO' : '') + (d.volume_percent != null ? ' vol ' + d.volume_percent + '%' : '')));
+  const ch = chosenDevice();
+  L.push('Elegido: ' + (ch ? ch.name : 'ninguno') + ' · guardado: ' + (ls.get('deviceName') || '—'));
+  const r = await api('GET', '/me/player').catch(()=>null);
+  if(!r) L.push('Estado: sin respuesta');
+  else if(r.status === 204) L.push('Estado: 204 (Spotify no ve nada reproduciéndose)');
+  else {
+    const st = await r.json().catch(()=>null);
+    if(st){
+      L.push('Estado: ' + (st.is_playing ? 'SONANDO' : 'en pausa') + ' en ' + (st.device ? st.device.name + (st.device.volume_percent != null ? ' (vol ' + st.device.volume_percent + '%)' : '') : '?'));
+      if(current && st.item) L.push('¿Es la canción de la carta? ' + (st.item.id === current.trackId ? 'sí' : 'NO'));
+      if(st.actions && st.actions.disallows) L.push('Bloqueos: ' + Object.keys(st.actions.disallows).join(', '));
+    } else L.push('Estado: ' + r.status);
+  }
+  L.push('', 'Últimos intentos:'); (log.length ? log : ['(ninguno todavía)']).forEach(x => L.push(' ' + x));
+  $('diagOut').textContent = L.join('\n');
 }
 async function attemptPlay(silent){
   if(!current || busy) return;
@@ -509,6 +549,10 @@ document.addEventListener('visibilitychange', () => {
   if(!document.hidden && pending) setTimeout(() => attemptPlay(true), 800);
 });
 $('wakeRetry').onclick = () => attemptPlay(false);
+$('diagHome').onclick = diagnose;
+$('diagPlay').onclick = diagnose;
+$('diagRefresh').onclick = diagnose;
+$('diagClose').onclick = () => $('diagSheet').classList.remove('show');
 
 // ---------- inicio ----------
 (async () => {
