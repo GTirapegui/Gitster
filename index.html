@@ -155,6 +155,15 @@ input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);ba
     <div class="stage">
       <div class="vinyl" id="vinyl"><div class="lbl"><span id="cardNo">#?</span></div></div>
       <p class="status" id="playStatus">Sonando…</p>
+      <div class="card" id="wakeBox" hidden style="width:100%">
+        <b>No encuentro tu celular en Spotify</b>
+        <ol class="steps">
+          <li>Toca <b>Abrir Spotify</b> y dale play a cualquier canción.</li>
+          <li>Déjala sonando y vuelve a esta app: la carta empieza sola.</li>
+        </ol>
+        <a class="btn primary" id="wakeLink" href="spotify://">Abrir Spotify</a>
+        <button class="btn" id="wakeRetry">Ya volví, reintentar</button>
+      </div>
       <div class="reveal" id="reveal">
         <div class="a" id="rArtist"></div>
         <div class="y" id="rYear"></div>
@@ -292,40 +301,101 @@ function renderDevList(){
     b.innerHTML = '<span></span><small></small>';
     b.firstChild.textContent = d.name;
     b.lastChild.textContent = (d.type === 'Smartphone' ? 'Celular' : d.type === 'Computer' ? 'Computador' : d.type === 'Speaker' ? 'Parlante' : d.type) + (d.is_active ? ' · activo' : '');
-    b.onclick = () => { ls.set('deviceId', d.id); renderDevList(); renderDevChip(); };
+    b.onclick = () => { ls.set('deviceId', d.id); ls.set('deviceName', d.name); renderDevList(); renderDevChip(); if(pending) attemptPlay(false); };
     $('devList').appendChild(b);
   });
 }
 async function openDevices(){ $('devSheet').classList.add('show'); $('devList').innerHTML = '<p>Buscando…</p>'; await loadDevices(); renderDevList(); }
 
 // ---------- reproducir ----------
+// Si Spotify se durmió (típico en iPhone), la carta queda pendiente y se reintenta sola
+let pending = false, pollT = 0, pollUntil = 0, busy = false;
+const okStatus = r => r && (r.ok || r.status === 202 || r.status === 204);
+function stopPoll(){ clearInterval(pollT); pollT = 0; }
+function showWake(on){
+  $('wakeBox').hidden = !on;
+  if(!on) $('wakeBox').querySelector('b').textContent = 'No encuentro tu celular en Spotify';
+  pending = on;
+  if(on){
+    $('playStatus').textContent = 'Spotify se durmió en tu celular.';
+    stopPoll(); pollUntil = Date.now() + 90000;
+    pollT = setInterval(async () => {
+      if(Date.now() > pollUntil){ stopPoll(); return; }
+      if(document.hidden || busy) return;
+      await loadDevices();
+      if(devices.length && current) attemptPlay(true);
+    }, 2500);
+  } else stopPoll();
+}
+async function tryPlayOn(deviceId, trackId){
+  const q = deviceId ? '?device_id=' + encodeURIComponent(deviceId) : '';
+  try{ return await api('PUT', '/me/player/play' + q, { uris:['spotify:track:' + trackId], position_ms:0 }); }
+  catch(e){ return null; }
+}
+async function attemptPlay(silent){
+  if(!current || busy) return;
+  busy = true;
+  try{
+    const { card, trackId } = current;
+    if(!silent) $('playStatus').textContent = 'Conectando con Spotify…';
+    await loadDevices();
+    let dev = chosenDevice();
+    // 1) el dispositivo elegido o, si no aparece en la lista, el último que usaste
+    const savedId = ls.get('deviceId');
+    let r = await tryPlayOn(dev ? dev.id : savedId, trackId);
+    // 2) si no resultó, que Spotify use el último dispositivo activo
+    if(!okStatus(r) && (!r || r.status === 404)) r = await tryPlayOn(null, trackId);
+    if(okStatus(r)){
+      showWake(false);
+      paused = false;
+      $('vinyl').classList.remove('paused');
+      $('pauseBtn').textContent = '⏸ Pausa';
+      const name = dev ? dev.name : (ls.get('deviceName') || 'Spotify');
+      $('playStatus').textContent = 'Sonando en ' + name;
+      if(dev){ ls.set('deviceId', dev.id); ls.set('deviceName', dev.name); }
+      if(card){ played.add(card[0]); ls.set('played', [...played]); updatePlayed(); }
+      verifyPlaying(trackId, dev ? dev.id : savedId);
+      return;
+    }
+    if(!r) return;
+    const j = await r.json().catch(()=>({}));
+    const reason = (j.error && (j.error.reason || j.error.message)) || '';
+    if(r.status === 404) showWake(true);
+    else if(r.status === 403) $('playStatus').textContent = 'Spotify no deja reproducir: se necesita Premium (' + reason + ').';
+    else $('playStatus').textContent = 'Error ' + r.status + ' ' + reason;
+  } finally { busy = false; }
+}
+// Comprueba a los 2,5 s que Spotify realmente esté sonando (iOS a veces acepta la orden y no suena)
+function verifyPlaying(trackId, deviceId){
+  setTimeout(async () => {
+    if(!current || current.trackId !== trackId || paused) return;
+    const r = await api('GET', '/me/player').catch(()=>null);
+    const st = r && r.status === 200 ? await r.json().catch(()=>null) : null;
+    if(st && st.is_playing) return;
+    const r2 = await tryPlayOn(deviceId, trackId);
+    setTimeout(async () => {
+      if(!current || current.trackId !== trackId || paused) return;
+      const r3 = await api('GET', '/me/player').catch(()=>null);
+      const st3 = r3 && r3.status === 200 ? await r3.json().catch(()=>null) : null;
+      if(!(st3 && st3.is_playing)){
+        $('vinyl').classList.add('paused');
+        $('playStatus').textContent = 'Spotify recibió la carta pero el celular no la dejó sonar.';
+        showWake(true);
+        $('wakeBox').querySelector('b').textContent = 'Tu celular bloqueó el audio';
+      }
+    }, 2500);
+  }, 2500);
+}
 async function playCard(card, trackId){
   current = { card, trackId };
   paused = false;
   show('play');
+  showWake(false);
   $('reveal').classList.remove('show');
   $('revealBtn').disabled = false;
   $('cardNo').textContent = card ? '#' + card[0] : '?';
   $('vinyl').classList.add('paused');
-  $('playStatus').textContent = 'Conectando con Spotify…';
-  $('pauseBtn').textContent = '⏸ Pausa';
-  await loadDevices();
-  let dev = chosenDevice();
-  if(!dev){ $('playStatus').textContent = 'No hay dónde reproducir. Abre Spotify en tu celular y toca «Desde el inicio».'; openDevices(); return; }
-  let r;
-  try{ r = await api('PUT', '/me/player/play?device_id=' + encodeURIComponent(dev.id), { uris:['spotify:track:' + trackId], position_ms:0 }); }
-  catch(e){ return; }
-  if(r.ok || r.status === 202 || r.status === 204){
-    $('vinyl').classList.remove('paused');
-    $('playStatus').textContent = 'Sonando en ' + dev.name;
-    if(card){ played.add(card[0]); ls.set('played', [...played]); updatePlayed(); }
-    return;
-  }
-  const j = await r.json().catch(()=>({}));
-  const reason = (j.error && (j.error.reason || j.error.message)) || '';
-  if(r.status === 403) $('playStatus').textContent = 'Spotify no deja reproducir: se necesita Premium (' + reason + ').';
-  else if(r.status === 404){ $('playStatus').textContent = 'El dispositivo se durmió. Abre Spotify, dale play a algo y toca «Desde el inicio».'; openDevices(); }
-  else $('playStatus').textContent = 'Error ' + r.status + ' ' + reason;
+  await attemptPlay(false);
 }
 async function togglePause(){
   if(!current) return;
@@ -363,6 +433,7 @@ function parseTrack(text){
   return m ? m[1] : null;
 }
 async function startScan(){
+  showWake(false);
   show('scan');
   $('scanStatus').textContent = 'Abriendo cámara…';
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ $('scanStatus').textContent = 'Este navegador no deja usar la cámara. Usa Chrome o Safari.'; return; }
@@ -391,7 +462,8 @@ function tick(){
   if(!id){ $('scanStatus').textContent = 'Ese QR no es una canción de Spotify.'; return; }
   stopScan();
   if(navigator.vibrate) navigator.vibrate(60);
-  playCard(byId.get(id) || null, id);
+  show('play'); $('playStatus').textContent = 'Carta leída…';
+  setTimeout(() => playCard(byId.get(id) || null, id), 1200);
 }
 
 // ---------- carta al azar / por número ----------
@@ -422,14 +494,18 @@ $('numInput').addEventListener('keydown', e => { if(e.key === 'Enter') $('numGo'
 $('pauseBtn').onclick = togglePause;
 $('replayBtn').onclick = () => { if(current) playCard(current.card, current.trackId); };
 $('revealBtn').onclick = reveal;
-$('homeBtn').onclick = () => show('home');
+$('homeBtn').onclick = () => { showWake(false); show('home'); };
 $('resetPlayed').onclick = () => { played = new Set(); ls.set('played', []); updatePlayed(); toast('Partida nueva: todas las cartas disponibles'); };
 $('logout').onclick = () => { ls.del('tok'); show('setup'); };
 $('devChip').onclick = openDevices;
 $('devRefresh').onclick = openDevices;
 $('devClose').onclick = () => $('devSheet').classList.remove('show');
 document.querySelectorAll('.sheet').forEach(s => s.addEventListener('click', e => { if(e.target === s) s.classList.remove('show'); }));
-document.addEventListener('visibilitychange', () => { if(document.hidden && stream) { stopScan(); show('home'); } });
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden && stream) { stopScan(); show('home'); }
+  if(!document.hidden && pending) setTimeout(() => attemptPlay(true), 800);
+});
+$('wakeRetry').onclick = () => attemptPlay(false);
 
 // ---------- inicio ----------
 (async () => {
