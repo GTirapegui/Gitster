@@ -1,4 +1,4 @@
-# Hitster Chile (app propia)
+# Gitster Chile (app propia)
 
 App web para jugar con las cartas impresas de Hitster Chile: escaneas el QR con la cámara
 dentro de la app, la canción suena en tu Spotify sin mostrar el nombre, y al final tocas
