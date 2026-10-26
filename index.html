@@ -32,6 +32,7 @@ body{background:radial-gradient(120% 80% at 50% 0%,#2a2140 0%,var(--bg) 60%);col
 .top{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .brand{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.01em}
 .brand b{color:var(--accent)}
+.ver{font-family:var(--body);font-size:11px;font-weight:700;color:var(--muted);background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:2px 7px;vertical-align:middle;letter-spacing:.02em}
 .chip{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:var(--bg2);border:1px solid var(--line);color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chip .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
 .chip.on .dot{background:var(--ok);box-shadow:0 0 8px var(--ok)}
@@ -97,7 +98,7 @@ input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);ba
 <body>
 <div class="app">
   <div class="top">
-    <div class="brand">Hitster <b>Chile</b></div>
+    <div class="brand">Hitster <b>Chile</b> <span class="ver" id="ver"></span></div>
     <button class="chip" id="devChip" hidden><span class="dot"></span><span id="devName">Sin dispositivo</span></button>
   </div>
 
@@ -201,6 +202,7 @@ input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);ba
 <script>
 (() => {
 'use strict';
+const VERSION = 'v4';
 const CARDS = window.CARDS || [];
 const byId = new Map(CARDS.map(c => [c[1], c]));
 const byNo = new Map(CARDS.map(c => [c[0], c]));
@@ -475,6 +477,7 @@ function randomCard(){
 }
 
 // ---------- eventos ----------
+$('ver').textContent = VERSION;
 $('redirectTxt').textContent = REDIRECT;
 $('copyRedirect').onclick = () => {
   const done = () => toast('Redirect URI copiado');
